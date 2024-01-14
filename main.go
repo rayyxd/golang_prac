@@ -3,64 +3,49 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+
 	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
-	"net/http"
 )
-
-type User struct {
-	gorm.Model
-	Username string
-	Email    string
-	Password string
-}
 
 var db *gorm.DB
 
 func init() {
+	os.Setenv("DATABASE_URL", "user=postgres dbname=postgres password=admin sslmode=disable")
 	var err error
-	dsn := "user=postgres dbname=postgres password=admin sslmode=disable"
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err = gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	// Миграция таблицы User
-	err = db.AutoMigrate(&User{})
+	err = db.AutoMigrate(&User{}) // Создание таблицы User (если её нет)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-}
 
-// Создание нового пользователя
-func createUser(user *User) error {
-	return db.Create(user).Error
-}
+	fmt.Println("Connected to the database")
 
-// Получение пользователя по ID
-func getUserByID(id uint) (User, error) {
-	var user User
-	err := db.First(&user, id).Error
-	return user, err
-}
+	// db.Create(&User{Username: "Sultan", Email: "abdukarimov.05@gmail.com", Password: "asdsad&asd"})
+	// db.Model(&User{}).Where("id = ?", 2).Update("username", "Aaaaaa")
+	// db.Unscoped().Delete(&User{}, "id = ?", 3)
 
-// Обновление имени пользователя по ID
-func updateUsernameByID(id uint, newUsername string) error {
-	return db.Model(&User{}).Where("id = ?", id).Update("username", newUsername).Error
-}
+	// user, err := getUserByID(4)
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// } else {
+	// 	fmt.Println("User by ID:", user)
+	// }
 
-// Удаление пользователя по ID
-func deleteUserByID(id uint) error {
-	return db.Delete(&User{}, id).Error
-}
+	// allUsers, err := getAllUsers()
+	// if err != nil {
+	// 	fmt.Println("Error:", err)
+	// } else {
+	// 	fmt.Println("All users:", allUsers)
+	// }
 
-// Получение списка всех пользователей
-func getAllUsers() ([]User, error) {
-	var users []User
-	err := db.Find(&users).Error
-	return users, err
 }
 
 type JsonRequest struct {
@@ -75,56 +60,17 @@ type JsonResponse struct {
 	Message string `json:"message"`
 }
 
+type User struct {
+	gorm.Model
+	Username string
+	Email    string
+	Password string
+}
+
 func main() {
-	//newUser := User{
-	//	Username: "test2",
-	//	Email:    "asd@asd",
-	//	Password: "qwe",
-	//}
-	//// Создание нового пользователя
-	//err := createUser(&newUser)
-	//if err != nil {
-	//	fmt.Println("Error creating user:", err)
-	//	return
-	//}
-	//fmt.Println("User created successfully. ID:", newUser.ID)
-	//
-	//// Получение пользователя по ID
-	//userByID, err := getUserByID(newUser.ID)
-	//if err != nil {
-	//	fmt.Println("Error getting user by ID:", err)
-	//	return
-	//}
-	//fmt.Printf("User by ID %d: %+v\n", newUser.ID, userByID)
-	//
-	//// Обновление имени пользователя по ID
-	//err = updateUsernameByID(newUser.ID, "new_john_doe")
-	//if err != nil {
-	//	fmt.Println("Error updating username:", err)
-	//	return
-	//}
-	//fmt.Println("Username updated successfully.")
-	//
-	//// Получение списка всех пользователей
-	//allUsers, err := getAllUsers()
-	//if err != nil {
-	//	fmt.Println("Error getting all users:", err)
-	//	return
-	//}
-	//fmt.Println("All Users:")
-	//for _, u := range allUsers {
-	//	fmt.Printf("ID: %d, Username: %s, Email: %s\n", u.ID, u.Username, u.Email)
-	//}
-	//
-	//// Удаление пользователя по ID
-	//err = deleteUserByID(newUser.ID)
-	//if err != nil {
-	//	fmt.Println("Error deleting user:", err)
-	//	return
-	//}
-	//fmt.Println("User deleted successfully.")
 	http.HandleFunc("/", handleRequest)
 	http.ListenAndServe(":8080", nil)
+
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {
@@ -164,11 +110,15 @@ func handlePostRequest(w http.ResponseWriter, r *http.Request) {
 	if requestData.Message != "" {
 		fmt.Println("Received POST message:", requestData.Message)
 	} else {
-		fmt.Printf("Received POST request:\nUsername: %s\nEmail: %s\nPassword: %s\n", requestData.Username, requestData.Email, requestData.Password)
+		fmt.Printf("Received POST request:\nUsername: %s\nEmail: %s\nPassword: %s\n --------------\n", requestData.Username, requestData.Email, requestData.Password)
 	}
-	//saveRegistrationData(requestData.Username, requestData.Email, requestData.Password)
 
-	// Добавляем заголовки CORS для основного запроса
+	saveError := saveRegistrationData(requestData.Username, requestData.Email, requestData.Password)
+	if saveError != nil {
+		http.Error(w, `{"status": "500", "message": "Failed to save registration data"}`, http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
@@ -199,7 +149,6 @@ func handleGetRequest(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Received GET request with name: %s, age: %s\n", name, age)
 
-	// Добавляем заголовки CORS для основного запроса
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
@@ -217,7 +166,29 @@ func handleGetRequest(w http.ResponseWriter, r *http.Request) {
 	w.Write(responseJSON)
 }
 
-//func saveRegistrationData(username, email, password string) error {
-//	_, err := db.Exec("INSERT INTO users (username, email, password) VALUES ($1, $2, $3)", username, email, password)
-//	return err
-//}
+func saveRegistrationData(username, email, password string) error {
+	user := User{Username: username, Email: email, Password: password}
+	result := db.Create(&user)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func getUserByID(userID uint) (User, error) {
+	var user User
+	result := db.Select("id, username, email, password").First(&user, userID)
+	if result.Error != nil {
+		return User{}, result.Error
+	}
+	return user, nil
+}
+
+func getAllUsers() ([]User, error) {
+	var users []User
+	result := db.Select("id, username, email, password").Find(&users)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return users, nil
+}

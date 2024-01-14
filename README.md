@@ -25,7 +25,7 @@ Overall, the Zeta Shop project aims to create a convenient and reliable platform
 ### Installation Guide:
 1. Install Golang: https://golang.org/dl/.
 2. Run the server: `go run main.go`.
-3. Use Postman or any HTTP client to send POST requests with JSON data to http://localhost:8080/login.html.
+3. Use Postman or any HTTP client to send POST requests with JSON data to http://localhost:8080.
 
 ### Participants: 
 * Abdukarimov Sultan
